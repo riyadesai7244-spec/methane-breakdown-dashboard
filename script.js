@@ -1,0 +1,217 @@
+const stateData = {
+      agriculture: 45,
+      energy: 35,
+      waste: 20
+    };
+
+    const districtData = {
+      Pune: { agriculture: 50, energy: 20, waste: 30 },
+      Mumbai: { agriculture: 5, energy: 45, waste: 50 },
+      Nagpur: { agriculture: 60, energy: 25, waste: 15 }
+    };
+
+    // State variables for individual interactive mode
+    let individualData = {
+      agriculture: 34,
+      energy: 33,
+      waste: 33
+    };
+
+    let currentMode = 'individual'; // Modes available: 'individual', 'district', 'state'
+    let currentDistrict = 'Pune';
+
+    // --- DOM Bindings ---
+    const modeSelector = document.getElementById('modeSelector');
+    const districtSelector = document.getElementById('districtSelector');
+
+    const sliderAgri = document.getElementById('sliderAgri');
+    const sliderEnergy = document.getElementById('sliderEnergy');
+    const sliderWaste = document.getElementById('sliderWaste');
+
+    const valAgri = document.getElementById('valAgri');
+    const valEnergy = document.getElementById('valEnergy');
+    const valWaste = document.getElementById('valWaste');
+
+    const totalWarning = document.getElementById('totalWarning');
+    const totalRemaining = document.getElementById('totalRemaining');
+
+    const gwp20El = document.getElementById('gwp20');
+    const gwp100El = document.getElementById('gwp100');
+
+    // --- Chart Configurations ---
+    const doughnutCtx = document.getElementById('doughnutChart').getContext('2d');
+    const barCtx = document.getElementById('barChart').getContext('2d');
+
+    const colors = {
+      agriculture: '#10b981',
+      energy: '#ef4444',
+      waste: '#f59e0b'
+    };
+
+    // 1. Doughnut Chart Initialization
+    let doughnutChart = new Chart(doughnutCtx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Agriculture', 'Energy', 'Waste'],
+        datasets: [{
+          data: [individualData.agriculture, individualData.energy, individualData.waste],
+          backgroundColor: [colors.agriculture, colors.energy, colors.waste],
+          borderWidth: 0,
+          hoverOffset: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              font: { family: 'Outfit', size: 14 }
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: function (context) {
+                return ` ${context.label}: ${context.raw}%`;
+              }
+            }
+          }
+        },
+        cutout: '75%'
+      }
+    });
+
+    // 2. Bar Chart for Multi-tier comparison Initialization
+    let barChart = new Chart(barCtx, {
+      type: 'bar',
+      data: {
+        labels: ['Agriculture', 'Energy', 'Waste'],
+        datasets: [
+          {
+            label: 'Individual',
+            data: [individualData.agriculture, individualData.energy, individualData.waste],
+            backgroundColor: '#4f46e5', // Primary theme color
+            borderRadius: 4
+          },
+          {
+            label: 'District (Selected)',
+            data: [districtData.Pune.agriculture, districtData.Pune.energy, districtData.Pune.waste],
+            backgroundColor: '#9ca3af', // Gray indicator
+            borderRadius: 4
+          },
+          {
+            label: 'Maharashtra (State)',
+            data: [stateData.agriculture, stateData.energy, stateData.waste],
+            backgroundColor: '#374151', // Darker indicator
+            borderRadius: 4
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 100,
+            title: { display: true, text: 'Percentage Allocation (%)' }
+          }
+        },
+        plugins: {
+          legend: {
+            position: 'bottom'
+          }
+        }
+      }
+    });
+
+    // --- Core Application Functions ---
+
+    // Fetch current active data depending on specific mode
+    function getActiveData() {
+      if (currentMode === 'individual') return individualData;
+      if (currentMode === 'district') return districtData[currentDistrict];
+      return stateData;
+    }
+
+    // Main reactive update cycle triggered on any change
+    function updateDashboard() {
+      const data = getActiveData();
+      const isInteractive = currentMode === 'individual';
+
+      // Enable/disable slider interactions
+      [sliderAgri, sliderEnergy, sliderWaste].forEach(slider => {
+        slider.disabled = !isInteractive;
+      });
+
+      if (!isInteractive) {
+        // If not interactable (i.e. State or District), project the fixed data onto sliders
+        sliderAgri.value = data.agriculture;
+        sliderEnergy.value = data.energy;
+        sliderWaste.value = data.waste;
+      } else {
+        // Otherwise read directly from sliders allowing dynamic distribution
+        individualData.agriculture = parseInt(sliderAgri.value);
+        individualData.energy = parseInt(sliderEnergy.value);
+        individualData.waste = parseInt(sliderWaste.value);
+        Object.assign(data, individualData);
+      }
+
+      // Sync visual labels
+      valAgri.textContent = `${data.agriculture}%`;
+      valEnergy.textContent = `${data.energy}%`;
+      valWaste.textContent = `${data.waste}%`;
+
+      // Compute and check Budget Constraints
+      const total = data.agriculture + data.energy + data.waste;
+
+      totalRemaining.textContent = `Total Assigned: ${total}%`;
+      // Trigger warning if exceeding typical 100% boundary limit constraints
+      if (total > 100) {
+        totalRemaining.style.color = '#ef4444';
+        totalWarning.style.display = 'block';
+      } else {
+        totalRemaining.style.color = '#6b7280';
+        totalWarning.style.display = 'none';
+      }
+
+      // Apply Multipliers for GWP (Global Warming Potential Calculations)
+      const gwp20 = total * 84;
+      const gwp100 = total * 28;
+      gwp20El.textContent = gwp20.toLocaleString();
+      gwp100El.textContent = gwp100.toLocaleString();
+
+      // Refresh Doughnut Chart
+      doughnutChart.data.datasets[0].data = [data.agriculture, data.energy, data.waste];
+      doughnutChart.update();
+
+      // Refresh Live Comparison Bar Chart Data Structure
+      barChart.data.datasets[0].data = [individualData.agriculture, individualData.energy, individualData.waste];
+      const pData = districtData[currentDistrict];
+      barChart.data.datasets[1].data = [pData.agriculture, pData.energy, pData.waste];
+      barChart.data.datasets[1].label = `District (${currentDistrict})`;
+      barChart.update();
+    }
+
+    // --- System Event Listeners ---
+
+    modeSelector.addEventListener('change', (e) => {
+      currentMode = e.target.value;
+      // Visually toggle dropdown
+      districtSelector.style.display = currentMode === 'district' ? 'block' : 'none';
+      updateDashboard();
+    });
+
+    districtSelector.addEventListener('change', (e) => {
+      currentDistrict = e.target.value;
+      updateDashboard();
+    });
+
+    // Attach listeners dynamically to individual inputs
+    [sliderAgri, sliderEnergy, sliderWaste].forEach(slider => {
+      slider.addEventListener('input', updateDashboard);
+    });
+
+    // Initialize state visually
+    updateDashboard();
